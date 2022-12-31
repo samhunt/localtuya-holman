@@ -93,8 +93,8 @@ UPDATE_DPS_WHITELIST = [18, 19, 20]  # Socket (Wi-Fi)
 # length, zero padding implies could be more than one byte)
 PAYLOAD_DICT = {
     "type_0a": {
-        STATUS: {"hexByte": 0x0A, "command": {"gwId": "", "devId": ""}},
-        SET: {"hexByte": 0x07, "command": {"devId": "", "uid": "", "t": ""}},
+        STATUS: {"hexByte": 0x0A, "command": {"gwId": "", "devId": "", "cid": ""}},
+        SET: {"hexByte": 0x07, "command": {"devId": "", "uid": "", "t": "", "cid": ""}},
         HEARTBEAT: {"hexByte": 0x09, "command": {}},
         UPDATEDPS: {"hexByte": 0x12, "command": {"dpId": [18, 19, 20]}},
         RESET: {
@@ -393,6 +393,8 @@ class TuyaProtocol(asyncio.Protocol, ContextualLogger):
         def _status_update(msg):
             decoded_message = self._decode_payload(msg.payload)
             if "dps" in decoded_message:
+                if "cid" in decoded_message and decoded_message["cid"] != self.id:
+                    return
                 self.dps_cache.update(decoded_message["dps"])
 
             listener = self.listener and self.listener()
@@ -642,6 +644,8 @@ class TuyaProtocol(asyncio.Protocol, ContextualLogger):
             json_data["devId"] = self.id
         if "uid" in json_data:
             json_data["uid"] = self.id  # still use id, no separate uid
+        if "cid" in json_data:
+            json_data["cid"] = self.id
         if "t" in json_data:
             json_data["t"] = str(int(time.time()))
 
