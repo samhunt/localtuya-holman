@@ -46,6 +46,7 @@ from .const import (
     DOMAIN,
     PLATFORMS,
     CONF_MANUAL_DPS,
+    CONF_GATEWAY_DEVICE,
 )
 from .discovery import discover
 
@@ -89,6 +90,17 @@ CONFIGURE_DEVICE_SCHEMA = vol.Schema(
         vol.Required(CONF_HOST): str,
         vol.Required(CONF_DEVICE_ID): str,
         vol.Required(CONF_PROTOCOL_VERSION, default="3.3"): vol.In(["3.1", "3.3"]),
+        vol.Optional(CONF_SCAN_INTERVAL): int,
+        vol.Optional(CONF_MANUAL_DPS): str,
+        vol.Optional(CONF_RESET_DPIDS): str,
+        vol.Required(CONF_GATEWAY_DEVICE, default=False): bool,
+    }
+)
+
+CONFIGURE_SUBDEVICE_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_FRIENDLY_NAME): str,
+        vol.Required(CONF_CLIENT_ID): str,
         vol.Optional(CONF_SCAN_INTERVAL): int,
         vol.Optional(CONF_MANUAL_DPS): str,
         vol.Optional(CONF_RESET_DPIDS): str,
@@ -248,6 +260,10 @@ async def validate_input(hass: core.HomeAssistant, data):
             data[CONF_LOCAL_KEY],
             float(data[CONF_PROTOCOL_VERSION]),
         )
+        if CONF_GATEWAY_DEVICE in data:
+            _LOGGER.debug("Connected to gateway device")
+            return dps_string_list(detected_dps)
+
         if CONF_RESET_DPIDS in data:
             reset_ids_str = data[CONF_RESET_DPIDS].split(",")
             reset_ids = []
@@ -578,6 +594,26 @@ class LocalTuyaOptionsFlowHandler(config_entries.OptionsFlow):
                         return await self.async_step_configure_entity()
 
                 self.dps_strings = await validate_input(self.hass, user_input)
+
+                if self.device_data[CONF_GATEWAY_DEVICE]:
+                    # Add gateway device - user can add subdevices afterward
+                    config = {
+                        **self.device_data,
+                        CONF_DPS_STRINGS: self.dps_strings,
+                        CONF_ENTITIES: self.entities,
+                    }
+
+                    dev_id = self.device_data.get(CONF_DEVICE_ID)
+                    new_data = self.config_entry.data.copy()
+                    new_data[ATTR_UPDATED_AT] = str(int(time.time() * 1000))
+                    new_data[CONF_DEVICES].update({dev_id: config})
+
+                    self.hass.config_entries.async_update_entry(
+                        self.config_entry,
+                        data=new_data,
+                    )
+                    return self.async_create_entry(title="", data={})
+
                 return await self.async_step_pick_entity_type()
             except CannotConnect:
                 errors["base"] = "cannot_connect"
@@ -619,6 +655,18 @@ class LocalTuyaOptionsFlowHandler(config_entries.OptionsFlow):
             step_id="configure_device",
             data_schema=schema,
             errors=errors,
+            description_placeholders=placeholders,
+        )
+
+    async def async_step_configure_subdevice(self, user_input=None):
+        """Step for configuring devices associated with a Tuya Gateway device"""
+        schema = CONFIGURE_SUBDEVICE_SCHEMA
+        placeholders = {
+            "for_device": f"connected to {self.device_data[CONF_FRIENDLY_NAME]}"
+        }
+        return self.async_show_form(
+            step_id="configure_subdevice",
+            data_schema=schema,
             description_placeholders=placeholders,
         )
 

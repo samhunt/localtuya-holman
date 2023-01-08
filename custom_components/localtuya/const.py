@@ -46,6 +46,10 @@ CONF_DEFAULT_VALUE = "dps_default_value"
 CONF_RESET_DPIDS = "reset_dpids"
 CONF_PASSIVE_ENTITY = "is_passive_entity"
 
+# sub devices
+CONF_GATEWAY_DEVICE = "is_gateway_device"
+CONF_CLIENT_ID = "client_id"
+
 # light
 CONF_BRIGHTNESS_LOWER = "brightness_lower"
 CONF_BRIGHTNESS_UPPER = "brightness_upper"

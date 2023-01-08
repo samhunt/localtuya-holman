@@ -98,8 +98,22 @@
                     "scan_interval": "Scan interval (seconds, only when not updating automatically)",
                     "entities": "Entities (uncheck an entity to remove it)",
                     "manual_dps_strings": "Manual DPS to add (separated by commas ',') - used when detection is not working (optional)",
+                    "reset_dpids": "DPIDs to send in RESET command (separated by commas ',')- Used when device does not respond to status requests after turning on (optional)",
+                    "is_gateway_device": "Gateway device with Subdevices"
+                }
+            },
+            "configure_subdevice": {
+                "title": "Configure Tuya Subdevice",
+                "description": "Fill in the subdevice details {for_device}.",
+                "data": {
+                    "friendly_name": "Name",
+                    "client_id": "CID",
+                    "scan_interval": "Scan interval (seconds, only when not updating automatically)",
+                    "entities": "Entities (uncheck an entity to remove it)",
+                    "manual_dps_strings": "Manual DPS to add (separated by commas ',') - used when detection is not working (optional)",
                     "reset_dpids": "DPIDs to send in RESET command (separated by commas ',')- Used when device does not respond to status requests after turning on (optional)"
                 }
+
             },
             "pick_entity_type": {
                 "title": "Entity type selection",
