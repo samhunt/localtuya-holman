@@ -31,6 +31,7 @@ from .const import (
     ATTR_UPDATED_AT,
     CONF_ACTION,
     CONF_ADD_DEVICE,
+    CONF_ADD_SUBDEVICE,
     CONF_DPS_STRINGS,
     CONF_EDIT_DEVICE,
     CONF_LOCAL_KEY,
@@ -47,6 +48,8 @@ from .const import (
     PLATFORMS,
     CONF_MANUAL_DPS,
     CONF_GATEWAY_DEVICE,
+    CONF_GATEWAY,
+    CONF_SUBDEVICES,
 )
 from .discovery import discover
 
@@ -63,6 +66,7 @@ CUSTOM_DEVICE = "..."
 CONF_ACTIONS = {
     CONF_ADD_DEVICE: "Add a new device",
     CONF_EDIT_DEVICE: "Edit a device",
+    CONF_ADD_SUBDEVICE: "Add a subdevice",
     CONF_SETUP_CLOUD: "Reconfigure Cloud API account",
 }
 
@@ -100,8 +104,8 @@ CONFIGURE_DEVICE_SCHEMA = vol.Schema(
 CONFIGURE_SUBDEVICE_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_FRIENDLY_NAME): str,
+        vol.Required(CONF_DEVICE_ID): str,
         vol.Required(CONF_CLIENT_ID): str,
-        vol.Optional(CONF_SCAN_INTERVAL): int,
         vol.Optional(CONF_MANUAL_DPS): str,
         vol.Optional(CONF_RESET_DPIDS): str,
     }
@@ -143,6 +147,15 @@ def devices_schema(discovered_devices, cloud_devices_list, add_custom_device=Tru
     #         for ent in entries
     #     }
     # )
+    return vol.Schema({vol.Required(SELECTED_DEVICE): vol.In(devices)})
+
+
+def subdevices_schema(gateway_devices):
+    """Create schema for subdevices step."""
+    devices = {}
+    for dev_id, (dev_friendly_name, dev_host) in gateway_devices.items():
+        devices[dev_id] = f"{dev_friendly_name} ({dev_id}: {dev_host})"
+
     return vol.Schema({vol.Required(SELECTED_DEVICE): vol.In(devices)})
 
 
@@ -246,7 +259,7 @@ def config_schema():
     )
 
 
-async def validate_input(hass: core.HomeAssistant, data):
+async def validate_input(hass: core.HomeAssistant, data, gateway=None):
     """Validate the user input allows us to connect."""
     detected_dps = {}
 
@@ -254,14 +267,23 @@ async def validate_input(hass: core.HomeAssistant, data):
 
     reset_ids = None
     try:
-        interface = await pytuya.connect(
-            data[CONF_HOST],
-            data[CONF_DEVICE_ID],
-            data[CONF_LOCAL_KEY],
-            float(data[CONF_PROTOCOL_VERSION]),
-        )
+        if gateway is not None:
+            interface = await pytuya.connect(
+                gateway[CONF_HOST],
+                data[CONF_DEVICE_ID],
+                gateway[CONF_LOCAL_KEY],
+                float(gateway[CONF_PROTOCOL_VERSION]),
+            )
+        else:
+            interface = await pytuya.connect(
+                data[CONF_HOST],
+                data[CONF_DEVICE_ID],
+                data[CONF_LOCAL_KEY],
+                float(data[CONF_PROTOCOL_VERSION]),
+            )
+
         if CONF_GATEWAY_DEVICE in data:
-            _LOGGER.debug("Connected to gateway device")
+            _LOGGER.debug("Connected to gateway device.")
             return dps_string_list(detected_dps)
 
         if CONF_RESET_DPIDS in data:
@@ -431,6 +453,8 @@ class LocalTuyaOptionsFlowHandler(config_entries.OptionsFlow):
                 return await self.async_step_add_device()
             if user_input.get(CONF_ACTION) == CONF_EDIT_DEVICE:
                 return await self.async_step_edit_device()
+            if user_input.get(CONF_ACTION) == CONF_ADD_SUBDEVICE:
+                return await self.async_step_add_subdevice()
 
         return self.async_show_form(
             step_id="init",
@@ -596,11 +620,12 @@ class LocalTuyaOptionsFlowHandler(config_entries.OptionsFlow):
                 self.dps_strings = await validate_input(self.hass, user_input)
 
                 if self.device_data[CONF_GATEWAY_DEVICE]:
-                    # Add gateway device - user can add subdevices afterward
+                    # Add gateway device - subdevices will reference this afterward
                     config = {
                         **self.device_data,
                         CONF_DPS_STRINGS: self.dps_strings,
                         CONF_ENTITIES: self.entities,
+                        CONF_SUBDEVICES: [],  # Likely not needed
                     }
 
                     dev_id = self.device_data.get(CONF_DEVICE_ID)
@@ -658,16 +683,88 @@ class LocalTuyaOptionsFlowHandler(config_entries.OptionsFlow):
             description_placeholders=placeholders,
         )
 
+    async def async_step_add_subdevice(self, user_input=None):
+        """Handle adding a new subdevice to an existing gateway"""
+        # Use cache if available or fallback to manual discovery
+        self.editing_device = False
+        self.selected_device = None
+        errors = {}
+        if user_input is not None:
+            self.selected_device = user_input[SELECTED_DEVICE]
+            return await self.async_step_configure_subdevice()
+
+        devices = {}
+        for dev_id, configured_dev in self.config_entry.data[CONF_DEVICES].items():
+            gateway_dev = configured_dev.get(CONF_GATEWAY_DEVICE, None)
+            if gateway_dev:
+                devices[dev_id] = (configured_dev[CONF_FRIENDLY_NAME], configured_dev[CONF_HOST])
+
+        return self.async_show_form(
+            step_id="add_subdevice",
+            data_schema=subdevices_schema(devices),
+            errors=errors,
+        )
+
     async def async_step_configure_subdevice(self, user_input=None):
         """Step for configuring devices associated with a Tuya Gateway device"""
+        gateway = self.config_entry.data[CONF_DEVICES][self.selected_device]
+        # NEXT STEP HERE ASH: IF USERINPUT IS NOT EMPTY
+        # VALIDATE INPUT AND ADD IT AS A SUBDEVICE ARRAY IN THE GATEWAY DEVICE
+        errors = {}
+        if user_input is not None:
+            try:
+                # Not ready to do validation yet - just add it
+                self.device_data = user_input.copy()
+                dev_id = self.device_data[CONF_DEVICE_ID]
+                if gateway is not None:
+                    cloud_devs = self.hass.data[DOMAIN][DATA_CLOUD].device_list
+                    if dev_id in cloud_devs:
+                        self.device_data[CONF_MODEL] = cloud_devs[dev_id].get(
+                            CONF_PRODUCT_NAME
+                        )
+                    self.dps_strings = await validate_input(
+                        self.hass, user_input, gateway
+                    )
+
+                    return await self.async_step_pick_entity_type()
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            except InvalidAuth:
+                errors["base"] = "invalid_auth"
+            except EmptyDpsList:
+                errors["base"] = "empty_dps"
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.exception("Unexpected exception")
+                errors["base"] = "unknown"
+
+            #     if CONF_SUBDEVICES not in gateway:
+            #         gateway[CONF_SUBDEVICES] = {}
+            #     elif self.device_data[CONF_CLIENT_ID] in gateway[CONF_SUBDEVICES]:
+            #         raise DuplicateClientId
+
+            #     gateway[CONF_SUBDEVICES][
+            #         self.device_data[CONF_CLIENT_ID]
+            #     ] = self.device_data
+
+            #     new_data = self.config_entry.data.copy()
+            #     new_data[CONF_DEVICES][self.selected_device] = gateway
+            #     new_data[ATTR_UPDATED_AT] = str(int(time.time() * 1000))
+            #     self.hass.config_entries.async_update_entry(
+            #         self.config_entry,
+            #         data=new_data,
+            #     )
+            #     return self.async_create_entry(title="", data={})
+            # except DuplicateClientId:
+            #     errors["base"] = "cid_in_use"
+
         schema = CONFIGURE_SUBDEVICE_SCHEMA
-        placeholders = {
-            "for_device": f"connected to {self.device_data[CONF_FRIENDLY_NAME]}"
-        }
+
+        placeholders = {"for_device": f"connected to {gateway[CONF_FRIENDLY_NAME]}"}
         return self.async_show_form(
             step_id="configure_subdevice",
             data_schema=schema,
             description_placeholders=placeholders,
+            errors=errors,
         )
 
     async def async_step_pick_entity_type(self, user_input=None):
@@ -678,6 +775,7 @@ class LocalTuyaOptionsFlowHandler(config_entries.OptionsFlow):
                     **self.device_data,
                     CONF_DPS_STRINGS: self.dps_strings,
                     CONF_ENTITIES: self.entities,
+                    CONF_GATEWAY: self.selected_device or None,
                 }
 
                 dev_id = self.device_data.get(CONF_DEVICE_ID)
@@ -848,3 +946,7 @@ class InvalidAuth(exceptions.HomeAssistantError):
 
 class EmptyDpsList(exceptions.HomeAssistantError):
     """Error to indicate no datapoints found."""
+
+
+class DuplicateClientId(exceptions.HomeAssistantError):
+    """Error to indicate a duplicate Client ID already exists in gateway subdevices list."""

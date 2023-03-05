@@ -38,6 +38,7 @@ CONF_USER_ID = "user_id"
 
 CONF_ACTION = "action"
 CONF_ADD_DEVICE = "add_device"
+CONF_ADD_SUBDEVICE = "add_subdevice"
 CONF_EDIT_DEVICE = "edit_device"
 CONF_SETUP_CLOUD = "setup_cloud"
 CONF_NO_CLOUD = "no_cloud"
@@ -48,7 +49,9 @@ CONF_PASSIVE_ENTITY = "is_passive_entity"
 
 # sub devices
 CONF_GATEWAY_DEVICE = "is_gateway_device"
+CONF_GATEWAY = "gateway"
 CONF_CLIENT_ID = "client_id"
+CONF_SUBDEVICES = "subdevices"
 
 # light
 CONF_BRIGHTNESS_LOWER = "brightness_lower"

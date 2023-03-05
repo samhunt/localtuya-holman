@@ -39,6 +39,7 @@ from .const import (
     DATA_DISCOVERY,
     DOMAIN,
     TUYA_DEVICES,
+    CONF_GATEWAY,
 )
 from .discovery import TuyaDiscovery
 
@@ -266,7 +267,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             platforms = platforms.union(
                 set(entity[CONF_PLATFORM] for entity in entities)
             )
-            hass.data[DOMAIN][TUYA_DEVICES][dev_id] = TuyaDevice(hass, entry, dev_id)
+            gateway = None
+            if CONF_GATEWAY in entry.data[CONF_DEVICES][dev_id]:
+                gateway_id = entry.data[CONF_DEVICES][dev_id][CONF_GATEWAY]
+                gateway = hass.data[DOMAIN][TUYA_DEVICES][gateway_id]
+            # Maybe I could... pass the Gateway TuyaDevice or just do a lookup
+            hass.data[DOMAIN][TUYA_DEVICES][dev_id] = TuyaDevice(
+                hass, entry, dev_id, gateway
+            )
 
         await asyncio.gather(
             *[

@@ -404,7 +404,7 @@ class TuyaProtocol(asyncio.Protocol, ContextualLogger):
         return MessageDispatcher(self.id, _status_update)
 
     def connection_made(self, transport):
-        """Did connect to the device."""
+        """Did connect to the device. If device is a a subdevice, use gateway connection."""
         self.transport = transport
         self.on_connected.set_result(True)
 

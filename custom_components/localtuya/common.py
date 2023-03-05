@@ -37,6 +37,7 @@ from .const import (
     CONF_RESTORE_ON_RECONNECT,
     CONF_RESET_DPIDS,
     CONF_PASSIVE_ENTITY,
+    CONF_GATEWAY,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -130,7 +131,7 @@ def async_config_entry_by_device_id(hass, device_id):
 class TuyaDevice(pytuya.TuyaListener, pytuya.ContextualLogger):
     """Cache wrapper for pytuya.TuyaInterface."""
 
-    def __init__(self, hass, config_entry, dev_id):
+    def __init__(self, hass, config_entry, dev_id, gateway=None):
         """Initialize the cache."""
         super().__init__()
         self._hass = hass
@@ -146,12 +147,16 @@ class TuyaDevice(pytuya.TuyaListener, pytuya.ContextualLogger):
         self._entities = []
         self._local_key = self._dev_config_entry[CONF_LOCAL_KEY]
         self._default_reset_dpids = None
+        self._gateway = gateway
         if CONF_RESET_DPIDS in self._dev_config_entry:
             reset_ids_str = self._dev_config_entry[CONF_RESET_DPIDS].split(",")
 
             self._default_reset_dpids = []
             for reset_id in reset_ids_str:
                 self._default_reset_dpids.append(int(reset_id.strip()))
+
+        if gateway:
+            self._local_key = gateway[CONF_LOCAL_KEY]
 
         self.set_logger(_LOGGER, self._dev_config_entry[CONF_DEVICE_ID])
 
@@ -175,6 +180,10 @@ class TuyaDevice(pytuya.TuyaListener, pytuya.ContextualLogger):
 
     def async_connect(self):
         """Connect to device if not already connected."""
+        if CONF_GATEWAY in self._dev_config_entry:
+            gateway_id = self._dev_config_entry[CONF_GATEWAY]
+            gateway = self._config_entry.data[CONF_DEVICES][gateway_id]
+
         if not self._is_closing and self._connect_task is None and not self._interface:
             self._connect_task = asyncio.create_task(self._make_connection())
 
@@ -183,13 +192,26 @@ class TuyaDevice(pytuya.TuyaListener, pytuya.ContextualLogger):
         self.debug("Connecting to %s", self._dev_config_entry[CONF_HOST])
 
         try:
-            self._interface = await pytuya.connect(
-                self._dev_config_entry[CONF_HOST],
-                self._dev_config_entry[CONF_DEVICE_ID],
-                self._local_key,
-                float(self._dev_config_entry[CONF_PROTOCOL_VERSION]),
-                self,
-            )
+            if CONF_GATEWAY in self._dev_config_entry:
+                gateway_id = self._dev_config_entry[CONF_GATEWAY]
+                gateway = self._config_entry.data[CONF_DEVICES][gateway_id]
+
+                # self._interface = await pytuya.connect(
+                #     gateway[CONF_HOST],
+                #     self._dev_config_entry[CONF_DEVICE_ID],
+                #     gateway[CONF_LOCAL_KEY],
+                #     float(gateway[CONF_PROTOCOL_VERSION]),
+                #     self,
+                # )
+            else:
+                self._interface = await pytuya.connect(
+                    self._dev_config_entry[CONF_HOST],
+                    self._dev_config_entry[CONF_DEVICE_ID],
+                    self._local_key,
+                    float(self._dev_config_entry[CONF_PROTOCOL_VERSION]),
+                    self,
+                )
+
             self._interface.add_dps_to_request(self.dps_to_request)
         except Exception:  # pylint: disable=broad-except
             self.exception(f"Connect to {self._dev_config_entry[CONF_HOST]} failed")
@@ -437,6 +459,7 @@ class LocalTuyaEntity(RestoreEntity, pytuya.ContextualLogger):
     def device_info(self):
         """Return device information for the device registry."""
         model = self._dev_config_entry.get(CONF_MODEL, "Tuya generic")
+
         return {
             "identifiers": {
                 # Serial numbers are unique identifiers within a specific domain
@@ -445,7 +468,7 @@ class LocalTuyaEntity(RestoreEntity, pytuya.ContextualLogger):
             "name": self._dev_config_entry[CONF_FRIENDLY_NAME],
             "manufacturer": "Tuya",
             "model": f"{model} ({self._dev_config_entry[CONF_DEVICE_ID]})",
-            "sw_version": self._dev_config_entry[CONF_PROTOCOL_VERSION],
+            # "sw_version": self._dev_config_entry[CONF_PROTOCOL_VERSION] or "Unknown",
         }
 
     @property

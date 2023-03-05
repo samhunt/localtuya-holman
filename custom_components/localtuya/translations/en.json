@@ -44,7 +44,8 @@
             "entity_already_configured": "Entity with this ID has already been configured.",
             "address_in_use": "Address used for discovery is already in use. Make sure no other application is using it (TCP port 6668).",
             "discovery_failed": "Something failed when discovering devices. See log for details.",
-            "empty_dps": "Connection to device succeeded but no datapoints found, please try again. Create a new issue and include debug logs if problem persists."
+            "empty_dps": "Connection to device succeeded but no datapoints found, please try again. Create a new issue and include debug logs if problem persists.",
+            "cid_in_use": "This client ID is already configured for this gateway."
         },
         "step": {
             "yaml_import": {
@@ -57,6 +58,7 @@
                 "data": {
                     "add_device": "Add a new device",
                     "edit_device": "Edit a device",
+                    "add_subdevice": "Add a subdevice",
                     "setup_cloud": "Reconfigure Cloud API account"
                 }
             },
@@ -72,6 +74,13 @@
                 "description": "Pick the configured device you wish to edit.",
                 "data": {
                     "selected_device": "Configured Devices"
+                }
+            },
+            "add_subdevice": {
+                "title": "Add subdevice to gateway",
+                "description": "Pick the gateway you wish to add a subdevice to.",
+                "data": {
+                    "selected_device": "Gateway Devices"
                 }
             },
             "cloud_setup": {
@@ -107,6 +116,7 @@
                 "description": "Fill in the subdevice details {for_device}.",
                 "data": {
                     "friendly_name": "Name",
+                    "device_id": "Device ID",
                     "client_id": "CID",
                     "scan_interval": "Scan interval (seconds, only when not updating automatically)",
                     "entities": "Entities (uncheck an entity to remove it)",
