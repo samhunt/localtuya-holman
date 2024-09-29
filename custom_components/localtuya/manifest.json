@@ -1,6 +1,6 @@
 {
   "domain": "localtuya-holman",
-  "name": "LocalTuya integration",
+  "name": "LocalTuyaHolman integration",
   "version": "4.1.1",
   "documentation": "https://github.com/rospogrigio/localtuya/",
   "dependencies": [],
